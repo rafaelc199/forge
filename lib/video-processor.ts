@@ -6,6 +6,7 @@ import { promises as fs } from 'fs';
 // Add a declaration for the 'fluent-ffmpeg' module
 declare module 'fluent-ffmpeg';
 declare module 'fluent-ffmpeg';
+declare module 'fluent-ffmpeg';
 
 export async function processVideo(videoPath: string, operations: VideoOperation[]) {
   const jobId = Date.now().toString();
