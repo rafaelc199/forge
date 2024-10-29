@@ -1,20 +1,20 @@
 export type VideoOperation = {
-  type: 'trim' | 'resize' | 'filter' | 'brightness' | 'contrast' | 'textOverlay' | 'speed' | 'crop' | 'rotate';
-  startTime?: number;
-  duration?: number;
+  type: 'resize' | 'filter' | 'crop' | 'rotate' | 'trim';
+  // Resize properties
   width?: number;
   height?: number;
+  // Filter properties
   filter?: string;
-  brightness?: number;
-  contrast?: number;
-  text?: string;
-  position?: { x: number; y: number };
-  speed?: number;
+  // Crop properties
   cropWidth?: number;
   cropHeight?: number;
   cropX?: number;
   cropY?: number;
+  // Rotate properties
   angle?: number;
+  // Trim properties
+  startTime?: number;
+  duration?: number;
 };
 
 export type VideoProcessingJob = {
