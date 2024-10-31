@@ -1,29 +1,27 @@
 import { NextResponse } from 'next/server';
 import { processVideo } from '@/lib/video-processor';
-import { VideoProcessingJob } from '@/types/video';
+import { readFile } from 'fs/promises';
+import path from 'path';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { videoId, operations } = body as VideoProcessingJob;
+    const { videoId, operations } = await request.json();
 
-    if (!videoId || !operations) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
+    // Read the video file
+    const videoPath = path.join(process.cwd(), 'uploads', videoId);
+    const fileBuffer = await readFile(videoPath);
+    const videoFile = new File([fileBuffer], videoId, { type: 'video/mp4' });
 
-    const jobId = await processVideo(videoId, operations);
+    const jobId = await processVideo(videoFile, operations);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
-      jobId 
+      jobId
     });
   } catch (error) {
     console.error('Processing error:', error);
     return NextResponse.json(
-      { error: 'Processing failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Processing failed' },
       { status: 500 }
     );
   }

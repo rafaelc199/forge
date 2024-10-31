@@ -1,60 +1,53 @@
-import { join } from 'path';
 import { VideoOperation } from '@/types/video';
-import { promises as fs } from 'fs';
-import ffmpeg from 'fluent-ffmpeg';
 
-export async function processVideo(videoPath: string, operations: VideoOperation[]): Promise<string> {
+export async function processVideo(
+  videoFile: File,
+  operations: VideoOperation[],
+  onProgress?: (progress: number) => void
+): Promise<{ blob: Blob, url: string }> {
   try {
-    const jobId = Date.now().toString();
-    const cleanVideoPath = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath;
-    const inputPath = join(process.cwd(), 'public', cleanVideoPath);
-    const outputDir = join(process.cwd(), 'public', 'processed');
-    const outputPath = join(outputDir, `${jobId}.mp4`);
-    const publicPath = `/processed/${jobId}.mp4`;
+    const formData = new FormData();
+    formData.append('video', videoFile);
+    formData.append('operations', JSON.stringify(operations));
 
-    // Ensure directories exist
-    await fs.mkdir(outputDir, { recursive: true });
-
-    // Process video with FFmpeg
-    await new Promise<void>((resolve, reject) => {
-      let command = ffmpeg(inputPath);
-
-      operations.forEach(operation => {
-        switch (operation.type) {
-          case 'resize':
-            if (operation.width && operation.height) {
-              command = command.size(`${operation.width}x${operation.height}`);
-            }
-            break;
-          case 'rotate':
-            if (typeof operation.angle === 'number') {
-              command = command.videoFilters(`rotate=${operation.angle}*PI/180`);
-            }
-            break;
-          case 'filter':
-            if (operation.filter === 'grayscale') {
-              command = command.videoFilters('colorchannelmixer=.3:.4:.3:0:.3:.4:.3:0:.3:.4:.3');
-            }
-            break;
-          case 'trim':
-            if (operation.startTime !== undefined && operation.duration !== undefined) {
-              command = command
-                .setStartTime(operation.startTime)
-                .setDuration(operation.duration);
-            }
-            break;
-        }
-      });
-
-      command
-        .on('end', () => resolve())
-        .on('error', (err) => reject(err))
-        .save(outputPath);
+    const response = await fetch('/api/video/process', {
+      method: 'POST',
+      body: formData,
     });
 
-    return publicPath;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Video processing failed');
+    }
+
+    // Criar um blob com o tipo correto
+    const arrayBuffer = await response.arrayBuffer();
+    const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
+    
+    // Criar uma URL para o blob
+    const url = URL.createObjectURL(blob);
+
+    // Pré-carregar o vídeo
+    await new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      
+      video.onloadeddata = resolve;
+      video.onerror = reject;
+      
+      // Prevenir reprodução automática
+      video.autoplay = false;
+      video.muted = true;
+      
+      // Carregar apenas os metadados primeiro
+      video.preload = 'metadata';
+      
+      video.src = url;
+    });
+
+    // Retornar tanto o blob quanto a URL
+    return { blob, url };
   } catch (error) {
-    console.error('Video processing error:', error);
+    console.error('Video processing failed:', error);
     throw error;
   }
 }

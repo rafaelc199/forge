@@ -16,8 +16,15 @@ export function VideoPlayer({ videoRef, src }: VideoPlayerProps) {
     if (!videoRef.current) return;
 
     const video = videoRef.current;
-    const handleLoadStart = () => setIsLoading(true);
-    const handleLoadedData = () => setIsLoading(false);
+    
+    const handleLoadStart = () => {
+      setIsLoading(true);
+    };
+
+    const handleLoadedData = () => {
+      setIsLoading(false);
+    };
+
     const handleError = () => {
       setError('Error loading video');
       setIsLoading(false);
@@ -27,23 +34,28 @@ export function VideoPlayer({ videoRef, src }: VideoPlayerProps) {
     video.addEventListener('loadeddata', handleLoadedData);
     video.addEventListener('error', handleError);
 
+    // Only load if src has changed
+    if (video.src !== src) {
+      video.load();
+    }
+
     return () => {
       video.removeEventListener('loadstart', handleLoadStart);
       video.removeEventListener('loadeddata', handleLoadedData);
       video.removeEventListener('error', handleError);
     };
-  }, [videoRef]);
+  }, [videoRef, src]);
 
   return (
     <div className="relative group aspect-video bg-black rounded-lg overflow-hidden">
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
           <p className="text-white">{error}</p>
         </div>
       )}
@@ -52,6 +64,9 @@ export function VideoPlayer({ videoRef, src }: VideoPlayerProps) {
         ref={videoRef}
         className="w-full h-full"
         playsInline
+        controls={false}
+        preload="metadata"
+        key={src}
         onContextMenu={(e) => e.preventDefault()}
       >
         <source src={src} type="video/mp4" />

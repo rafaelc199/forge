@@ -1,0 +1,31 @@
+.filterPreview {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background-color: hsl(var(--muted));
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.filterGrayscale {
+  filter: grayscale(100%);
+}
+
+.filterSepia {
+  filter: sepia(100%);
+}
+
+.filterBrightness {
+  filter: brightness(120%);
+}
+
+.filterContrast {
+  filter: contrast(120%);
+}
+
+.filterSaturate {
+  filter: saturate(150%);
+}
+
+.filterBlur {
+  filter: blur(2px);
+} 

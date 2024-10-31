@@ -1,0 +1,16 @@
+.selectedRange {
+  position: absolute;
+  height: 100%;
+  background-color: hsl(var(--primary) / 0.2);
+  border: 2px solid hsl(var(--primary));
+  transition: all 0.2s ease;
+}
+
+.timeIndicator {
+  position: absolute;
+  width: 2px;
+  height: 100%;
+  background-color: hsl(var(--primary));
+  transition: left 0.2s ease;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+} 

@@ -1,21 +1,32 @@
-export type VideoOperation = {
-  type: 'resize' | 'filter' | 'crop' | 'rotate' | 'trim';
-  // Resize properties
-  width?: number;
-  height?: number;
-  // Filter properties
-  filter?: string;
-  // Crop properties
-  cropWidth?: number;
-  cropHeight?: number;
-  cropX?: number;
-  cropY?: number;
-  // Rotate properties
-  angle?: number;
-  // Trim properties
-  startTime?: number;
-  duration?: number;
-};
+export type FilterType = 'grayscale' | 'sepia' | 'brightness' | 'contrast';
+
+export type VideoOperation = 
+  | {
+      type: 'trim';
+      startTime: number;
+      endTime: number;
+    }
+  | {
+      type: 'resize';
+      width: number;
+      height: number;
+    }
+  | {
+      type: 'rotate';
+      angle: number;
+    }
+  | {
+      type: 'crop';
+      cropWidth: number;
+      cropHeight: number;
+      cropX: number;
+      cropY: number;
+    }
+  | {
+      type: 'filter';
+      filter: FilterType;
+      intensity: number;
+    };
 
 export type VideoProcessingJob = {
   videoId: string;
@@ -32,4 +43,8 @@ export type Job = {
   createdAt: Date;
   updatedAt: Date;
   error?: string;
+};
+
+export type VideoPreset = {
+  [key: string]: VideoOperation[];
 };

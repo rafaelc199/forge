@@ -1,0 +1,23 @@
+.previewContainer {
+  position: relative;
+  width: 10rem;
+  height: 10rem;
+  border: 2px solid hsl(var(--primary));
+  border-radius: var(--radius);
+  transition: transform 300ms;
+}
+
+.previewContent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.previewBox {
+  width: 5rem;
+  height: 3rem;
+  background-color: hsl(var(--primary) / 0.2);
+  border-radius: var(--radius);
+} 

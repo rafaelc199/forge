@@ -1,0 +1,36 @@
+.thumbnailContainer {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.thumbnail {
+  position: relative;
+  height: 100%;
+}
+
+.operationMarker {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background-color: hsl(var(--primary));
+  z-index: 10;
+}
+
+.timeIndicator {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background-color: hsl(var(--destructive));
+  z-index: 20;
+}
+
+.trimRange {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background-color: hsl(var(--primary) / 0.2);
+  z-index: 5;
+} 

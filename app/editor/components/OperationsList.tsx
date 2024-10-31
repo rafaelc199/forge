@@ -22,10 +22,16 @@ export function OperationsList({ operations, onRemoveOperation }: OperationsList
       case 'rotate':
         return `Rotate ${operation.angle}°`;
       case 'trim':
-        return `Trim from ${operation.startTime}s to ${operation.startTime! + operation.duration!}s`;
+        return `Trim from ${formatTime(operation.startTime)} to ${formatTime(operation.endTime)}`;
       default:
         return 'Unknown operation';
     }
+  };
+
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   if (operations.length === 0) {

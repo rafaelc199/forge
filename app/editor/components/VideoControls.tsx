@@ -44,6 +44,43 @@ export function VideoControls({ videoRef }: VideoControlsProps) {
     };
   }, [videoRef]);
 
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!videoRef.current) return;
+
+      switch (e.key.toLowerCase()) {
+        case ' ':
+        case 'k':
+          e.preventDefault();
+          if (isPlaying) {
+            videoRef.current.pause();
+          } else {
+            videoRef.current.play();
+          }
+          break;
+        case 'j':
+          videoRef.current.currentTime -= 10;
+          break;
+        case 'l':
+          videoRef.current.currentTime += 10;
+          break;
+        case 'm':
+          videoRef.current.muted = !videoRef.current.muted;
+          break;
+        case 'f':
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            videoRef.current.requestFullscreen();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [videoRef, isPlaying]);
+
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
