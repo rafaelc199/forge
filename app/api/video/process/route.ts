@@ -92,9 +92,9 @@ function getFilterCommand(operation: Extract<VideoOperation, { type: 'filter' }>
     case 'sepia':
       return 'colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131';
     case 'brightness':
-      return `eq=brightness=${operation.intensity / 100}`;
+      return `eq=brightness=${(operation.intensity ?? 100) / 100}`;
     case 'contrast':
-      return `eq=contrast=${operation.intensity / 100}`;
+      return `eq=contrast=${(operation.intensity ?? 100) / 100}`;
     default:
       throw new Error(`Unsupported filter: ${operation.filter}`);
   }

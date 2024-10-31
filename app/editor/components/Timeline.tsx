@@ -1,10 +1,15 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Slider } from '@/components/ui/slider';
+import { useVideoThumbnails } from '@/app/hooks/use-video-thumbnails';
 import { VideoOperation } from '@/types/video';
-import styles from './Timeline.module.css';
-import Image from 'next/image';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface TimelineProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -21,118 +26,139 @@ export function Timeline({
   duration, 
   onTimeUpdate 
 }: TimelineProps) {
-  const [thumbnails, setThumbnails] = useState<string[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const { thumbnails, generateThumbnails } = useVideoThumbnails();
+  const [previewTime, setPreviewTime] = useState<number | null>(null);
+  const previewFrameRef = useRef<HTMLCanvasElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  const generateThumbnails = useCallback(async (video: HTMLVideoElement) => {
-    try {
-      setIsGenerating(true);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      canvas.width = 160;
-      canvas.height = 90;
-
-      const thumbnailCount = 10;
-      const interval = video.duration / thumbnailCount;
-      const newThumbnails: string[] = [];
-      const originalTime = video.currentTime;
-
-      for (let i = 0; i < thumbnailCount; i++) {
-        video.currentTime = i * interval;
-        await new Promise<void>((resolve) => {
-          const handleSeeked = () => {
-            video.removeEventListener('seeked', handleSeeked);
-            resolve();
-          };
-          video.addEventListener('seeked', handleSeeked);
-        });
-        
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        newThumbnails.push(canvas.toDataURL('image/jpeg', 0.5));
-      }
-
-      video.currentTime = originalTime;
-      setThumbnails(newThumbnails);
-    } catch (error) {
-      console.error('Error generating thumbnails:', error);
-    } finally {
-      setIsGenerating(false);
-    }
-  }, []);
-
   useEffect(() => {
+    if (!videoRef.current || !videoRef.current.duration) return;
+    generateThumbnails(videoRef.current);
+  }, [videoRef, generateThumbnails]);
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const updatePreviewFrame = (time: number) => {
+    if (!videoRef.current || !previewFrameRef.current) return;
+
     const video = videoRef.current;
-    if (!video || !duration || isGenerating) return;
+    const canvas = previewFrameRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    generateThumbnails(video);
-  }, [videoRef, duration, isGenerating, generateThumbnails]);
+    // Salvar o tempo atual do vídeo
+    const currentVideoTime = video.currentTime;
+    
+    // Atualizar para o tempo do preview
+    video.currentTime = time;
+    
+    // Quando o vídeo estiver pronto neste tempo
+    video.addEventListener('seeked', function onSeeked() {
+      video.removeEventListener('seeked', onSeeked);
+      
+      // Desenhar o frame no canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Restaurar o tempo original
+      video.currentTime = currentVideoTime;
+    }, { once: true });
+  };
 
-  const handleTimeChange = useCallback((value: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = value;
-      onTimeUpdate(value);
-    }
-  }, [videoRef, onTimeUpdate]);
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current) return;
+    
+    const rect = timelineRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    const time = percentage * duration;
+    
+    setPreviewTime(time);
+    updatePreviewFrame(time);
+  };
 
-  const formatTime = (time: number): string => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const handleMouseLeave = () => {
+    setPreviewTime(null);
   };
 
   return (
-    <div className="w-full space-y-2" ref={timelineRef}>
-      <div className="relative h-16 bg-muted rounded-lg overflow-hidden">
+    <div className="space-y-2">
+      <div 
+        ref={timelineRef}
+        className="relative h-16 bg-muted rounded-lg overflow-hidden"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
         {/* Thumbnails */}
-        <div className={styles.thumbnailContainer}>
-          {thumbnails.map((thumbnail, index) => (
-            <div
-              key={index}
-              className={styles.thumbnail}
-              style={{ minWidth: `${100 / thumbnails.length}%` }}
-            >
-              <div className="relative h-full w-full">
-                <Image
-                  src={thumbnail}
-                  alt={`Thumbnail ${index}`}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 33vw"
-                  className="object-cover"
-                  priority={index < 3}
-                />
-              </div>
-            </div>
+        <div className="absolute inset-0 flex">
+          {thumbnails.map((thumbnail: string, index: number) => (
+            <TooltipProvider key={index}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className="h-full flex-grow relative group"
+                    style={{
+                      backgroundImage: `url(${thumbnail})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center'
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{formatTime((index / thumbnails.length) * duration)}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ))}
         </div>
 
-        {/* Operation markers */}
-        {operations.map((operation, index) => {
-          if (operation.type === 'trim') {
-            const startPosition = (operation.startTime / duration) * 100;
-            const endPosition = (operation.endTime / duration) * 100;
-            return (
-              <div key={index}>
-                <div
-                  className={styles.operationMarker}
-                  style={{ left: `${startPosition}%` }}
-                  title={`Trim start: ${formatTime(operation.startTime)}`}
-                />
-                <div
-                  className={styles.operationMarker}
-                  style={{ left: `${endPosition}%` }}
-                  title={`Trim end: ${formatTime(operation.endTime)}`}
-                />
-                <div
-                  className={styles.trimRange}
-                  style={{
-                    left: `${startPosition}%`,
-                    width: `${endPosition - startPosition}%`
-                  }}
-                />
+        {/* Preview canvas */}
+        {previewTime !== null && (
+          <div className="absolute -top-24 left-1/2 -translate-x-1/2 bg-popover border rounded-lg p-1 shadow-lg">
+            <canvas
+              ref={previewFrameRef}
+              width="160"
+              height="90"
+              className="rounded"
+            />
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full">
+              <div className="bg-popover text-popover-foreground px-2 py-1 rounded text-xs">
+                {formatTime(previewTime)}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Preview time indicator */}
+        {previewTime !== null && (
+          <div
+            className="absolute top-0 w-0.5 h-full bg-primary/50"
+            style={{
+              left: `${(previewTime / duration) * 100}%`,
+              transition: 'left 0.1s linear'
+            }}
+          />
+        )}
+
+        {/* Operation markers */}
+        {operations.map((op, index) => {
+          if (op.type === 'trim') {
+            const startPercent = (op.startTime / duration) * 100;
+            const endPercent = (op.endTime / duration) * 100;
+            return (
+              <div
+                key={index}
+                className="absolute top-0 h-full bg-primary/20"
+                style={{
+                  left: `${startPercent}%`,
+                  width: `${endPercent - startPercent}%`
+                }}
+              />
             );
           }
           return null;
@@ -140,25 +166,25 @@ export function Timeline({
 
         {/* Current time indicator */}
         <div
-          className={styles.timeIndicator}
-          style={{ left: `${(currentTime / duration) * 100}%` }}
+          className="absolute top-0 w-0.5 h-full bg-primary"
+          style={{
+            left: `${(currentTime / duration) * 100}%`,
+            transition: 'left 0.1s linear'
+          }}
         />
       </div>
 
-      {/* Time slider */}
-      <Slider
-        value={[currentTime]}
-        defaultValue={[0]}
-        min={0}
-        max={duration}
-        step={0.1}
-        onValueChange={([value]) => handleTimeChange(value)}
-        className="cursor-pointer"
-      />
-
-      {/* Time display */}
       <div className="flex justify-between text-sm text-muted-foreground">
         <span>{formatTime(currentTime)}</span>
+        <Slider
+          defaultValue={[currentTime]}
+          value={[currentTime]}
+          min={0}
+          max={duration}
+          step={0.1}
+          onValueChange={([value]) => onTimeUpdate(value)}
+          className="mx-4 flex-grow"
+        />
         <span>{formatTime(duration)}</span>
       </div>
     </div>

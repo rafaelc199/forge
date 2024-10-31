@@ -1,50 +1,21 @@
-export type FilterType = 'grayscale' | 'sepia' | 'brightness' | 'contrast';
-
 export type VideoOperation = 
-  | {
-      type: 'trim';
-      startTime: number;
-      endTime: number;
-    }
-  | {
-      type: 'resize';
-      width: number;
-      height: number;
-    }
-  | {
-      type: 'rotate';
-      angle: number;
-    }
-  | {
-      type: 'crop';
-      cropWidth: number;
-      cropHeight: number;
-      cropX: number;
-      cropY: number;
-    }
-  | {
-      type: 'filter';
-      filter: FilterType;
-      intensity: number;
-    };
-
-export type VideoProcessingJob = {
-  videoId: string;
-  operations: VideoOperation[];
-};
-
-export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed';
-
-export type Job = {
-  id: string;
-  videoId: string;
-  status: ProcessingStatus;
-  operations: VideoOperation[];
-  createdAt: Date;
-  updatedAt: Date;
-  error?: string;
-};
+  | { type: 'trim'; startTime: number; endTime: number }
+  | { type: 'resize'; width: number; height: number }
+  | { type: 'rotate'; angle: number }
+  | { type: 'filter'; filter: 'grayscale' | 'sepia' | 'brightness' | 'contrast'; intensity?: number }
+  | { type: 'crop'; cropX: number; cropY: number; cropWidth: number; cropHeight: number };
 
 export type VideoPreset = {
   [key: string]: VideoOperation[];
 };
+
+export interface CompressionOptions {
+  quality: 'high' | 'medium' | 'low';
+  maxWidth?: number;
+  maxHeight?: number;
+  maintainAspectRatio?: boolean;
+}
+
+export interface ProcessingOptions {
+  compression?: CompressionOptions;
+}

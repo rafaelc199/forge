@@ -11,13 +11,19 @@ import { Progress } from '@/components/ui/progress';
 import { CropModal } from './components/modals/CropModal';
 import { RotateModal } from './components/modals/RotateModal';
 import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from '@/components/ui/select';
-import { Clock, Download, Loader2, Play, Upload, Filter } from 'lucide-react';
+import { Clock, Download, Loader2, Play, Upload, Filter, Crop, RotateCw, Maximize, Undo2, Redo2 } from 'lucide-react';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { VideoInfo } from './components/VideoInfo';
 import { Timeline } from './components/Timeline';
 import { ProjectManager } from './components/ProjectManager';
 import { TrimModal } from './components/modals/TrimModal';
 import { processVideo } from '@/lib/video-processor';
+import { ProcessingProgress } from './components/ProcessingProgress';
+import { PresetManager } from './components/PresetManager';
+import { OperationFeedback } from './components/OperationFeedback';
+import { TooltipButton } from './components/TooltipButton';
+import { ThemeToggle } from './components/ThemeToggle';
+import { useOperationHistory } from '@/hooks/use-operation-history';
 
 const PRESETS: VideoPreset = {
   'cinematic': [
@@ -33,7 +39,6 @@ const PRESETS: VideoPreset = {
 export default function EditorPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [operations, setOperations] = useState<VideoOperation[]>([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showResizeModal, setShowResizeModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -45,10 +50,39 @@ export default function EditorPage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showTrimModal, setShowTrimModal] = useState(false);
+  const [currentOperation, setCurrentOperation] = useState<string>('');
+  const [feedback, setFeedback] = useState<{
+    message: string;
+    type: 'success' | 'error' | 'info';
+    isVisible: boolean;
+  }>({
+    message: '',
+    type: 'info',
+    isVisible: false
+  });
+
+  const {
+    operations,
+    addOperation,
+    addOperations,
+    removeOperation,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    setOperations
+  } = useOperationHistory();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) setVideoFile(file);
+  };
+
+  const showFeedback = (message: string, type: 'success' | 'error' | 'info') => {
+    setFeedback({ message, type, isVisible: true });
+    setTimeout(() => {
+      setFeedback(prev => ({ ...prev, isVisible: false }));
+    }, 3000);
   };
 
   const handleProcessVideo = useCallback(async () => {
@@ -58,15 +92,15 @@ export default function EditorPage() {
       setIsProcessing(true);
       setProgress(0);
 
-      const { url } = await processVideo(
-        videoFile, 
-        operations,
-        (progress) => {
-          setProgress(progress);
-          console.log('Processing progress:', progress);
-        }
-      );
-      
+      for (let i = 0; i < operations.length; i++) {
+        const operation = operations[i];
+        setCurrentOperation(getOperationDescription(operation));
+        setProgress((i / operations.length) * 100);
+        showFeedback(`Processing: ${getOperationDescription(operation)}`, 'info');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      const { url } = await processVideo(videoFile, operations);
       setProcessedVideoUrl(url);
       
       if (videoRef.current) {
@@ -91,15 +125,36 @@ export default function EditorPage() {
         }
       }
       
-      alert('Video processed successfully!');
+      showFeedback('Video processed successfully!', 'success');
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to process video');
+      showFeedback(
+        error instanceof Error ? error.message : 'Failed to process video', 
+        'error'
+      );
       console.error('Processing error:', error);
     } finally {
       setIsProcessing(false);
       setProgress(100);
+      setCurrentOperation('');
     }
   }, [videoFile, operations]);
+
+  const getOperationDescription = (operation: VideoOperation): string => {
+    switch (operation.type) {
+      case 'filter':
+        return `Applying ${operation.filter} filter`;
+      case 'resize':
+        return `Resizing to ${operation.width}x${operation.height}`;
+      case 'rotate':
+        return `Rotating ${operation.angle}°`;
+      case 'crop':
+        return 'Cropping video';
+      case 'trim':
+        return 'Trimming video';
+      default:
+        return 'Processing...';
+    }
+  };
 
   const handleAddOperation = (operation: VideoOperation) => {
     switch (operation.type) {
@@ -119,17 +174,13 @@ export default function EditorPage() {
         setShowRotateModal(true);
         break;
       default:
-        setOperations(prev => [...prev, operation]);
+        addOperation(operation);
     }
-  };
-
-  const handleRemoveOperation = (index: number) => {
-    setOperations(prevOperations => prevOperations.filter((_, i) => i !== index));
   };
 
   const handleResize = (width: number, height: number) => {
     if (width > 0 && height > 0) {
-      setOperations(prev => [...prev, { type: 'resize', width, height }]);
+      addOperation({ type: 'resize', width, height });
       setShowResizeModal(false);
     } else {
       alert('Please enter valid dimensions');
@@ -138,11 +189,11 @@ export default function EditorPage() {
 
   const handleFilter = (filter: "grayscale" | "sepia" | "brightness" | "contrast", intensity?: number) => {
     if (filter) {
-      setOperations(prev => [...prev, { 
+      addOperation({ 
         type: 'filter', 
         filter,
         intensity: intensity || 100 
-      }]);
+      });
       setShowFilterModal(false);
     }
   };
@@ -165,18 +216,18 @@ export default function EditorPage() {
   };
 
   const handleCrop = (cropX: number, cropY: number, cropWidth: number, cropHeight: number) => {
-    setOperations(prev => [...prev, { 
+    addOperation({ 
       type: 'crop',
       cropX,
       cropY,
       cropWidth,
       cropHeight
-    }]);
+    });
     setShowCropModal(false);
   };
 
   const handleRotate = (angle: number) => {
-    setOperations(prev => [...prev, { type: 'rotate', angle }]);
+    addOperation({ type: 'rotate', angle });
     setShowRotateModal(false);
   };
 
@@ -213,9 +264,15 @@ export default function EditorPage() {
         switch (e.key.toLowerCase()) {
           case 'z':
             e.preventDefault();
-            if (operations.length > 0) {
-              setOperations(prev => prev.slice(0, -1));
+            if (e.shiftKey) {
+              canRedo && redo();
+            } else {
+              canUndo && undo();
             }
+            break;
+          case 'y':
+            e.preventDefault();
+            canRedo && redo();
             break;
           case 's':
             e.preventDefault();
@@ -227,7 +284,7 @@ export default function EditorPage() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [videoFile, operations, handleProcessVideo]);
+  }, [videoFile, canUndo, canRedo, undo, redo, handleProcessVideo]);
 
   useEffect(() => {
     return () => {
@@ -237,21 +294,30 @@ export default function EditorPage() {
     };
   }, [processedVideoUrl]);
 
+  const handleApplyPreset = (presetOperations: VideoOperation[]) => {
+    addOperations(presetOperations);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
         <div className="bg-card rounded-xl shadow-lg border border-border/50 backdrop-blur-sm">
-          <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/50 bg-clip-text text-transparent">
-                VideoForge
-              </h1>
-              <KeyboardShortcuts />
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-primary/50 bg-clip-text text-transparent">
+                  VideoForge
+                </h1>
+              </div>
+              <div className="flex items-center gap-2 sm:gap-4">
+                <ThemeToggle />
+                <KeyboardShortcuts />
+              </div>
             </div>
 
             {!videoFile ? (
               <div 
-                className="border-2 border-dashed border-muted-foreground/25 rounded-xl p-12
+                className="border-2 border-dashed border-muted-foreground/25 rounded-xl p-6 sm:p-12
                           hover:border-primary/50 transition-colors duration-300
                           bg-muted/50 backdrop-blur-sm"
                 onDragOver={handleDragOver}
@@ -282,7 +348,7 @@ export default function EditorPage() {
                 </label>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <div className="rounded-xl overflow-hidden border border-border/50 shadow-lg">
                   <VideoPlayer 
                     videoRef={videoRef} 
@@ -292,50 +358,60 @@ export default function EditorPage() {
 
                 <VideoInfo videoRef={videoRef} />
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
-                      <Button 
-                        variant="outline"
-                        onClick={() => {
-                          console.log("Opening trim modal");
-                          if (videoRef.current) {
-                            videoRef.current.pause();
-                            setShowTrimModal(true);
-                          }
-                        }}
-                      >
-                        <Clock className="w-4 h-4 mr-2" />
-                        Trim
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        className="hover:bg-primary/10"
-                        onClick={() => handleAddOperation({ 
-                          type: 'filter',
-                          filter: 'grayscale',
-                          intensity: 1
-                        })}
-                      >
-                        <Filter className="w-4 h-4 mr-2" />
-                        Filters
-                      </Button>
-                      <Button onClick={() => handleAddOperation({ 
-                        type: 'crop', 
-                        cropX: 0, 
-                        cropY: 0, 
-                        cropWidth: 100, 
-                        cropHeight: 100 
-                      })}>
-                        Crop
-                      </Button>
-                      <Button onClick={() => handleAddOperation({ type: 'rotate', angle: 0 })}>Rotate</Button>
-                      <Button onClick={() => handleAddOperation({ type: 'resize', width: 1280, height: 720 })}>Resize</Button>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div className="flex flex-wrap gap-2">
+                        <TooltipButton
+                          icon={Clock}
+                          label="Trim"
+                          tooltip="Cut unwanted parts from the beginning or end"
+                          onClick={() => handleAddOperation({ type: 'trim', startTime: 0, endTime: 0 })}
+                        />
+                        <TooltipButton
+                          icon={Filter}
+                          label="Filters"
+                          tooltip="Apply visual effects like grayscale, sepia, etc."
+                          onClick={() => handleAddOperation({ 
+                            type: 'filter',
+                            filter: 'grayscale',
+                            intensity: 1
+                          })}
+                        />
+                        <TooltipButton
+                          icon={Crop}
+                          label="Crop"
+                          tooltip="Select a specific area of the video"
+                          onClick={() => handleAddOperation({ 
+                            type: 'crop', 
+                            cropX: 0, 
+                            cropY: 0, 
+                            cropWidth: 100, 
+                            cropHeight: 100 
+                          })}
+                        />
+                        <TooltipButton
+                          icon={RotateCw}
+                          label="Rotate"
+                          tooltip="Rotate the video by any angle"
+                          onClick={() => handleAddOperation({ type: 'rotate', angle: 0 })}
+                        />
+                        <TooltipButton
+                          icon={Maximize}
+                          label="Resize"
+                          tooltip="Change video dimensions"
+                          onClick={() => handleAddOperation({ type: 'resize', width: 1280, height: 720 })}
+                        />
+                      </div>
+                      <PresetManager 
+                        onApplyPreset={handleApplyPreset}
+                        currentOperations={operations}
+                      />
                     </div>
                     
                     <OperationsList 
                       operations={operations} 
-                      onRemoveOperation={handleRemoveOperation} 
+                      onRemoveOperation={removeOperation} 
                     />
                   </div>
 
@@ -354,21 +430,42 @@ export default function EditorPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <Button 
-                    variant="outline"
-                    onClick={() => {
-                      if (processedVideoUrl) {
-                        URL.revokeObjectURL(processedVideoUrl);
-                      }
-                      setOperations([]);
-                      setProcessedVideoUrl(null);
-                    }}
-                    disabled={isProcessing}
-                  >
-                    Reset
-                  </Button>
-                  <div className="space-x-2">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={undo}
+                      disabled={!canUndo}
+                      title="Undo (Ctrl+Z)"
+                    >
+                      <Undo2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={redo}
+                      disabled={!canRedo}
+                      title="Redo (Ctrl+Y)"
+                    >
+                      <Redo2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline"
+                      onClick={() => {
+                        if (processedVideoUrl) {
+                          URL.revokeObjectURL(processedVideoUrl);
+                        }
+                        setOperations([]);
+                        setProcessedVideoUrl(null);
+                      }}
+                      disabled={isProcessing}
+                    >
+                      Reset
+                    </Button>
                     {processedVideoUrl && (
                       <Button 
                         variant="outline"
@@ -402,15 +499,6 @@ export default function EditorPage() {
                     </Button>
                   </div>
                 </div>
-
-                {isProcessing && (
-                  <div className="mt-4">
-                    <Progress value={progress} className="h-2" />
-                    <p className="text-sm text-center mt-2 text-muted-foreground">
-                      Processing video: {progress}%
-                    </p>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -421,7 +509,7 @@ export default function EditorPage() {
         <ResizeModal
           onClose={() => setShowResizeModal(false)}
           onApply={(width, height) => {
-            setOperations(prev => [...prev, { type: 'resize', width, height }]);
+            addOperation({ type: 'resize', width, height });
             setShowResizeModal(false);
           }}
           initialWidth={videoRef.current?.videoWidth || 1920}
@@ -431,13 +519,14 @@ export default function EditorPage() {
 
       {showFilterModal && (
         <FilterModal
+          open={showFilterModal}
           onClose={() => setShowFilterModal(false)}
-          onApply={(filter: "grayscale" | "sepia" | "brightness" | "contrast", intensity?: number) => {
-            setOperations(prev => [...prev, { 
-              type: 'filter' as const, 
+          onApply={(filter, intensity) => {
+            addOperation({ 
+              type: 'filter', 
               filter, 
-              intensity: intensity ?? 0
-            }]);
+              intensity: intensity ?? 100 
+            });
             setShowFilterModal(false);
           }}
           videoRef={videoRef}
@@ -448,13 +537,13 @@ export default function EditorPage() {
         <CropModal
           onClose={() => setShowCropModal(false)}
           onApply={(cropX, cropY, cropWidth, cropHeight) => {
-            setOperations(prev => [...prev, { 
+            addOperation({ 
               type: 'crop', 
               cropX, 
               cropY, 
               cropWidth, 
               cropHeight 
-            }]);
+            });
             setShowCropModal(false);
           }}
           videoRef={videoRef}
@@ -465,7 +554,7 @@ export default function EditorPage() {
         <RotateModal
           onClose={() => setShowRotateModal(false)}
           onApply={(angle) => {
-            setOperations(prev => [...prev, { type: 'rotate', angle }]);
+            addOperation({ type: 'rotate', angle });
             setShowRotateModal(false);
           }}
         />
@@ -476,16 +565,37 @@ export default function EditorPage() {
           onClose={() => setShowTrimModal(false)}
           onApply={(startTime: number, endTime: number) => {
             console.log('Applying trim:', startTime, endTime);
-            setOperations(prev => [...prev, { 
+            addOperation({ 
               type: 'trim', 
               startTime, 
               endTime 
-            }]);
+            });
             setShowTrimModal(false);
           }}
           videoRef={videoRef}
         />
       )}
+
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={redo}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Y)"
+        >
+          <Redo2 className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
