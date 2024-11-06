@@ -26,4 +26,4 @@ VideoForge é uma aplicação web para processamento de vídeos usando FFmpeg, c
 
 ## Instalação
 
-1. Clone o repositório: 
+1. Clone o repositório:

@@ -1,49 +1,84 @@
 "use client";
 
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { VideoOperation } from '@/types/video';
 
 interface FilterPreviewProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   operation: VideoOperation;
+  showComparison?: boolean;
 }
 
-export function FilterPreview({ videoRef, operation }: FilterPreviewProps) {
+export function FilterPreview({ videoRef, operation, showComparison = false }: FilterPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!videoRef.current || !canvasRef.current) return;
-    
     const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Apply preview effects based on operation type
-    const applyPreview = () => {
-      if (!videoRef.current || !ctx) return;
-      
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    // Ajustar dimensões do canvas para corresponder ao vídeo
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
 
-      switch (operation.type) {
-        case 'filter':
-          canvas.style.filter = `${operation.filter}(${operation.intensity}%)`;
-          break;
-        case 'rotate':
-          ctx.rotate((operation.angle || 0) * Math.PI / 180);
-          break;
-        // Add other operation previews
+    // Função para aplicar os filtros
+    const applyFilters = () => {
+      if (!ctx || !video) return;
+      
+      // Limpar o canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Desenhar o frame atual do vídeo
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Aplicar filtros se for uma operação de filtro
+      if (operation.type === 'filter') {
+        const filters = operation.filters;
+        const filterString = Object.entries(filters)
+          .filter(([_, value]) => value !== undefined)
+          .map(([filter, value]) => {
+            switch (filter) {
+              case 'brightness': return `brightness(${value}%)`;
+              case 'contrast': return `contrast(${value}%)`;
+              case 'saturate': return `saturate(${value}%)`;
+              case 'grayscale': return `grayscale(${value}%)`;
+              case 'sepia': return `sepia(${value}%)`;
+              case 'blur': return `blur(${value/10}px)`;
+              default: return '';
+            }
+          })
+          .join(' ');
+
+        canvas.style.filter = filterString;
       }
     };
 
-    const interval = setInterval(applyPreview, 1000 / 30); // 30fps
+    // Atualizar o canvas em cada frame
+    const animate = () => {
+      applyFilters();
+      requestAnimationFrame(animate);
+    };
 
-    return () => clearInterval(interval);
+    // Iniciar a animação
+    const animationId = requestAnimationFrame(animate);
+
+    // Limpar ao desmontar
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
   }, [videoRef, operation]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="w-full aspect-video rounded-lg"
+      className="w-full h-full object-cover"
+      style={{
+        opacity: showComparison ? 0.5 : 1,
+        transition: 'opacity 0.2s ease'
+      }}
     />
   );
 } 

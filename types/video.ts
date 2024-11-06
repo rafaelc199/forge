@@ -1,9 +1,38 @@
+export type FilterType = 'grayscale' | 'sepia' | 'brightness' | 'contrast' | 'blur' | 'saturate';
+
+export interface FilterConfig {
+  filters: {
+    [K in FilterType]?: number;
+  };
+  preset?: string;
+}
+
 export type VideoOperation = 
-  | { type: 'trim'; startTime: number; endTime: number }
-  | { type: 'resize'; width: number; height: number }
-  | { type: 'rotate'; angle: number }
-  | { type: 'filter'; filter: 'grayscale' | 'sepia' | 'brightness' | 'contrast'; intensity?: number }
-  | { type: 'crop'; cropX: number; cropY: number; cropWidth: number; cropHeight: number };
+  | {
+      type: 'filter';
+      filters: FilterConfig['filters'];
+    }
+  | {
+      type: 'trim';
+      startTime: number;
+      endTime: number;
+    }
+  | {
+      type: 'resize';
+      width: number;
+      height: number;
+    }
+  | {
+      type: 'rotate';
+      angle: number;
+    }
+  | {
+      type: 'crop';
+      cropX: number;
+      cropY: number;
+      cropWidth: number;
+      cropHeight: number;
+    };
 
 export type VideoPreset = {
   [key: string]: VideoOperation[];

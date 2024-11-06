@@ -4,13 +4,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { VideoPlayer } from './components/VideoPlayer';
 import { OperationsList } from './components/OperationsList';
 import { Button } from '@/components/ui/button';
-import { VideoOperation, VideoPreset } from '@/types/video';
 import { FilterModal } from './components/modals/FilterModal';
 import { ResizeModal } from './components/modals/ResizeModal';
 import { Progress } from '@/components/ui/progress';
 import { CropModal } from './components/modals/CropModal';
 import { RotateModal } from './components/modals/RotateModal';
-import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from '@/components/ui/select';
 import { Clock, Download, Loader2, Play, Upload, Filter, Crop, RotateCw, Maximize, Undo2, Redo2 } from 'lucide-react';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { VideoInfo } from './components/VideoInfo';
@@ -19,22 +17,13 @@ import { ProjectManager } from './components/ProjectManager';
 import { TrimModal } from './components/modals/TrimModal';
 import { processVideo } from '@/lib/video-processor';
 import { ProcessingProgress } from './components/ProcessingProgress';
-import { PresetManager } from './components/PresetManager';
 import { OperationFeedback } from './components/OperationFeedback';
 import { TooltipButton } from './components/TooltipButton';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useOperationHistory } from '@/hooks/use-operation-history';
-
-const PRESETS: VideoPreset = {
-  'cinematic': [
-    { type: 'filter', filter: 'contrast', intensity: 120 },
-    { type: 'filter', filter: 'brightness', intensity: 110 },
-  ],
-  'vintage': [
-    { type: 'filter', filter: 'sepia', intensity: 80 },
-    { type: 'filter', filter: 'contrast', intensity: 90 },
-  ],
-};
+import { toast } from '@/components/ui/use-toast';
+import { useLocalStorage } from '@/lib/hooks/use-local-storage';
+import { VideoOperation, FilterConfig } from '@/types/video';
 
 export default function EditorPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -73,6 +62,18 @@ export default function EditorPage() {
     setOperations
   } = useOperationHistory();
 
+  const [savedOperations, setSavedOperations] = useLocalStorage<VideoOperation[]>('video-operations', []);
+
+  useEffect(() => {
+    if (savedOperations.length > 0) {
+      setOperations(savedOperations);
+    }
+  }, [savedOperations, setOperations]);
+
+  useEffect(() => {
+    setSavedOperations(operations);
+  }, [operations, setSavedOperations]);
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) setVideoFile(file);
@@ -92,57 +93,59 @@ export default function EditorPage() {
       setIsProcessing(true);
       setProgress(0);
 
-      for (let i = 0; i < operations.length; i++) {
-        const operation = operations[i];
-        setCurrentOperation(getOperationDescription(operation));
-        setProgress((i / operations.length) * 100);
-        showFeedback(`Processing: ${getOperationDescription(operation)}`, 'info');
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      const { url } = await processVideo(videoFile, operations);
-      setProcessedVideoUrl(url);
-      
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-        
-        await new Promise((resolve) => {
-          if (!videoRef.current) return;
-          
-          const handleCanPlay = () => {
-            videoRef.current?.removeEventListener('canplay', handleCanPlay);
-            resolve(null);
-          };
-          
-          videoRef.current.addEventListener('canplay', handleCanPlay);
-          videoRef.current.load();
-        });
-
-        try {
-          await videoRef.current.play();
-        } catch (playError) {
-          console.warn('Auto-play failed:', playError);
-        }
-      }
-      
-      showFeedback('Video processed successfully!', 'success');
-    } catch (error) {
-      showFeedback(
-        error instanceof Error ? error.message : 'Failed to process video', 
-        'error'
+      const result = await processVideo(
+        videoFile,
+        operations,
+        (progress) => setProgress(progress)
       );
-      console.error('Processing error:', error);
+
+      if (result) {
+        if (processedVideoUrl) {
+          URL.revokeObjectURL(processedVideoUrl);
+        }
+
+        setProcessedVideoUrl(result.url);
+        
+        if (videoRef.current) {
+          const video = videoRef.current;
+          video.src = result.url;
+
+          await new Promise<void>((resolve) => {
+            function handleCanPlay() {
+              video.removeEventListener('canplay', handleCanPlay);
+              resolve();
+            }
+            video.addEventListener('canplay', handleCanPlay);
+          });
+
+          try {
+            await video.play();
+          } catch (playError) {
+            console.warn('Auto-play failed:', playError);
+          }
+        }
+
+        toast({
+          title: "Success",
+          description: "Video processed successfully"
+        });
+      }
+    } catch (error) {
+      console.log('Processing error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Processing failed"
+      });
     } finally {
       setIsProcessing(false);
       setProgress(100);
-      setCurrentOperation('');
     }
-  }, [videoFile, operations]);
+  }, [videoFile, operations, processedVideoUrl, videoRef]);
 
   const getOperationDescription = (operation: VideoOperation): string => {
     switch (operation.type) {
       case 'filter':
-        return `Applying ${operation.filter} filter`;
+        return `Applying filters: ${Object.keys(operation.filters).join(', ')}`;
       case 'resize':
         return `Resizing to ${operation.width}x${operation.height}`;
       case 'rotate':
@@ -187,14 +190,54 @@ export default function EditorPage() {
     }
   };
 
-  const handleFilter = (filter: "grayscale" | "sepia" | "brightness" | "contrast", intensity?: number) => {
-    if (filter) {
-      addOperation({ 
-        type: 'filter', 
-        filter,
-        intensity: intensity || 100 
+  const handleFilter = async (filterConfig: FilterConfig) => {
+    if (!videoRef.current || !videoFile) return;
+
+    try {
+      setIsProcessing(true);
+      setProgress(0);
+
+      const filterOperation: VideoOperation = {
+        type: 'filter',
+        filters: filterConfig.filters
+      };
+      
+      addOperation(filterOperation);
+
+      const result = await processVideo(
+        videoFile,
+        [...operations, filterOperation],
+        (progress) => setProgress(progress)
+      );
+
+      if (result && videoRef.current) {
+        const video = videoRef.current;
+        video.src = result.url;
+        
+        await new Promise<void>((resolve) => {
+          function handleCanPlay() {
+            video.removeEventListener('canplay', handleCanPlay);
+            resolve();
+          }
+          video.addEventListener('canplay', handleCanPlay);
+        });
+
+        toast({
+          title: "Success",
+          description: "Filters applied successfully"
+        });
+
+        setShowFilterModal(false);
+      }
+    } catch (error) {
+      console.log('Filter error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to apply filters"
       });
-      setShowFilterModal(false);
+    } finally {
+      setIsProcessing(false);
+      setProgress(0);
     }
   };
 
@@ -216,6 +259,14 @@ export default function EditorPage() {
   };
 
   const handleCrop = (cropX: number, cropY: number, cropWidth: number, cropHeight: number) => {
+    if (cropWidth < 10 || cropHeight < 10) {
+      toast({
+        title: "Error",
+        description: "Crop dimensions must be at least 10%"
+      });
+      return;
+    }
+
     addOperation({ 
       type: 'crop',
       cropX,
@@ -223,6 +274,7 @@ export default function EditorPage() {
       cropWidth,
       cropHeight
     });
+
     setShowCropModal(false);
   };
 
@@ -238,69 +290,85 @@ export default function EditorPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!videoRef.current) return;
+  const handleDurationChange = useCallback(() => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
+  }, []);
 
-    const video = videoRef.current;
-    const handleDurationChange = () => setDuration(video.duration);
-    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
-
-    video.addEventListener('loadedmetadata', handleDurationChange);
-    video.addEventListener('timeupdate', handleTimeUpdate);
-
-    return () => {
-      video.removeEventListener('loadedmetadata', handleDurationChange);
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-    };
+  const handleVideoTimeUpdate = useCallback(() => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
   }, []);
 
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (!videoFile) return;
-      
-      if (e.target instanceof HTMLInputElement) return;
+    const video = videoRef.current;
+    if (!video) return;
 
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key.toLowerCase()) {
-          case 'z':
-            e.preventDefault();
-            if (e.shiftKey) {
-              canRedo && redo();
-            } else {
-              canUndo && undo();
-            }
-            break;
-          case 'y':
-            e.preventDefault();
-            canRedo && redo();
-            break;
-          case 's':
-            e.preventDefault();
-            handleProcessVideo();
-            break;
-        }
-      }
+    video.addEventListener('loadedmetadata', handleDurationChange);
+    video.addEventListener('timeupdate', handleVideoTimeUpdate);
+
+    return () => {
+      video.removeEventListener('loadedmetadata', handleDurationChange);
+      video.removeEventListener('timeupdate', handleVideoTimeUpdate);
     };
+  }, [handleDurationChange, handleVideoTimeUpdate]);
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
+  const handleKeyPress = useCallback((e: KeyboardEvent) => {
+    if (!videoFile || e.target instanceof HTMLInputElement) return;
+
+    if (e.ctrlKey || e.metaKey) {
+      switch (e.key.toLowerCase()) {
+        case 'z':
+          e.preventDefault();
+          if (e.shiftKey && canRedo) {
+            redo();
+          } else if (canUndo) {
+            undo();
+          }
+          break;
+        case 'y':
+          e.preventDefault();
+          if (canRedo) redo();
+          break;
+        case 's':
+          e.preventDefault();
+          handleProcessVideo();
+          break;
+      }
+    }
   }, [videoFile, canUndo, canRedo, undo, redo, handleProcessVideo]);
 
   useEffect(() => {
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [handleKeyPress]);
+
+  useEffect(() => {
+    const url = processedVideoUrl;
     return () => {
-      if (processedVideoUrl) {
-        URL.revokeObjectURL(processedVideoUrl);
+      if (url) {
+        URL.revokeObjectURL(url);
       }
     };
   }, [processedVideoUrl]);
 
-  const handleApplyPreset = (presetOperations: VideoOperation[]) => {
-    addOperations(presetOperations);
-  };
+  useEffect(() => {
+    if (!videoRef.current || !videoFile) return;
+
+    const url = URL.createObjectURL(videoFile);
+    videoRef.current.src = url;
+    videoRef.current.load();
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [videoFile]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted">
-      <div className="container mx-auto px-4 py-4 sm:py-8">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto p-4 space-y-4">
         <div className="bg-card rounded-xl shadow-lg border border-border/50 backdrop-blur-sm">
           <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -374,8 +442,9 @@ export default function EditorPage() {
                           tooltip="Apply visual effects like grayscale, sepia, etc."
                           onClick={() => handleAddOperation({ 
                             type: 'filter',
-                            filter: 'grayscale',
-                            intensity: 1
+                            filters: {
+                              grayscale: 100
+                            }
                           })}
                         />
                         <TooltipButton
@@ -403,10 +472,6 @@ export default function EditorPage() {
                           onClick={() => handleAddOperation({ type: 'resize', width: 1280, height: 720 })}
                         />
                       </div>
-                      <PresetManager 
-                        onApplyPreset={handleApplyPreset}
-                        currentOperations={operations}
-                      />
                     </div>
                     
                     <OperationsList 
@@ -521,11 +586,10 @@ export default function EditorPage() {
         <FilterModal
           open={showFilterModal}
           onClose={() => setShowFilterModal(false)}
-          onApply={(filter, intensity) => {
+          onApply={(filterConfig: FilterConfig) => {
             addOperation({ 
-              type: 'filter', 
-              filter, 
-              intensity: intensity ?? 100 
+              type: 'filter',
+              filters: filterConfig.filters
             });
             setShowFilterModal(false);
           }}
@@ -596,6 +660,20 @@ export default function EditorPage() {
           <Redo2 className="h-4 w-4" />
         </Button>
       </div>
+
+      {isProcessing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-4">Processing Video</h3>
+            <div className="space-y-4">
+              <Progress value={progress} />
+              <p className="text-sm text-muted-foreground text-center">
+                Please wait while we apply your filters...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
