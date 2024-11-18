@@ -11,22 +11,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface ExportModalProps {
-  onClose: () => void;
-  onExport: (settings: ExportSettings) => void;
+interface ExportOptions {
+  format: 'mp4' | 'webm' | 'mov' | 'gif';
+  quality: 'lossless' | 'high' | 'medium' | 'low';
+  codec: 'h264' | 'h265' | 'vp9';
+  fps: number;
+  audioCodec: 'aac' | 'mp3' | 'opus';
+  audioQuality: number;
 }
 
-interface ExportSettings {
-  quality: '720p' | '1080p' | '4k';
-  format: 'mp4' | 'webm' | 'gif';
-  fps: number;
+interface ExportModalProps {
+  onClose: () => void;
+  onExport: (options: ExportOptions) => void;
 }
 
 export function ExportModal({ onClose, onExport }: ExportModalProps) {
-  const [settings, setSettings] = useState<ExportSettings>({
-    quality: '1080p',
+  const [options, setOptions] = useState<ExportOptions>({
     format: 'mp4',
-    fps: 30
+    quality: 'high',
+    codec: 'h264',
+    fps: 30,
+    audioCodec: 'aac',
+    audioQuality: 192
   });
 
   return (
@@ -38,18 +44,19 @@ export function ExportModal({ onClose, onExport }: ExportModalProps) {
           <div className="space-y-2">
             <label className="text-sm font-medium">Quality</label>
             <Select
-              value={settings.quality}
-              onValueChange={(value: '720p' | '1080p' | '4k') => 
-                setSettings(prev => ({ ...prev, quality: value }))
+              value={options.quality}
+              onValueChange={(value: 'lossless' | 'high' | 'medium' | 'low') => 
+                setOptions(prev => ({ ...prev, quality: value }))
               }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select quality" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
-                <SelectItem value="4k">4K</SelectItem>
+                <SelectItem value="lossless">Lossless</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -57,9 +64,9 @@ export function ExportModal({ onClose, onExport }: ExportModalProps) {
           <div className="space-y-2">
             <label className="text-sm font-medium">Format</label>
             <Select
-              value={settings.format}
-              onValueChange={(value: 'mp4' | 'webm' | 'gif') => 
-                setSettings(prev => ({ ...prev, format: value }))
+              value={options.format}
+              onValueChange={(value: 'mp4' | 'webm' | 'mov' | 'gif') => 
+                setOptions(prev => ({ ...prev, format: value }))
               }
             >
               <SelectTrigger>
@@ -68,6 +75,7 @@ export function ExportModal({ onClose, onExport }: ExportModalProps) {
               <SelectContent>
                 <SelectItem value="mp4">MP4</SelectItem>
                 <SelectItem value="webm">WebM</SelectItem>
+                <SelectItem value="mov">MOV</SelectItem>
                 <SelectItem value="gif">GIF</SelectItem>
               </SelectContent>
             </Select>
@@ -76,9 +84,9 @@ export function ExportModal({ onClose, onExport }: ExportModalProps) {
           <div className="space-y-2">
             <label className="text-sm font-medium">FPS</label>
             <Select
-              value={settings.fps.toString()}
+              value={options.fps.toString()}
               onValueChange={(value) => 
-                setSettings(prev => ({ ...prev, fps: parseInt(value) }))
+                setOptions(prev => ({ ...prev, fps: parseInt(value) }))
               }
             >
               <SelectTrigger>
@@ -91,13 +99,51 @@ export function ExportModal({ onClose, onExport }: ExportModalProps) {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Audio Codec</label>
+            <Select
+              value={options.audioCodec}
+              onValueChange={(value: 'aac' | 'mp3' | 'opus') => 
+                setOptions(prev => ({ ...prev, audioCodec: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select audio codec" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="aac">AAC</SelectItem>
+                <SelectItem value="mp3">MP3</SelectItem>
+                <SelectItem value="opus">Opus</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Audio Quality</label>
+            <Select
+              value={options.audioQuality.toString()}
+              onValueChange={(value) => 
+                setOptions(prev => ({ ...prev, audioQuality: parseInt(value) }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select audio quality" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="128">128 kbps</SelectItem>
+                <SelectItem value="192">192 kbps</SelectItem>
+                <SelectItem value="256">256 kbps</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="flex justify-end space-x-2">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => onExport(settings)}>
+          <Button onClick={() => onExport(options)}>
             Export
           </Button>
         </div>

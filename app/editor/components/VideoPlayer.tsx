@@ -1,83 +1,68 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from 'react';
-import { VideoControls } from './VideoControls';
+import React, { useEffect, useState } from 'react';
+import { VideoOperation } from '@/types/video';
 
 interface VideoPlayerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   src: string;
+  operations?: VideoOperation[];
 }
 
-export function VideoPlayer({ videoRef, src }: VideoPlayerProps) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function VideoPlayer({ videoRef, src, operations = [] }: VideoPlayerProps) {
+  const [style, setStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
-    if (!videoRef.current) return;
+    let filterString = '';
+    let transform = '';
 
-    const video = videoRef.current;
-    
-    const handleLoadStart = () => {
-      setIsLoading(true);
-    };
+    operations.forEach((op) => {
+      if (op.type === 'filter') {
+        const { filter, intensity } = op;
+        switch (filter) {
+          case 'brightness':
+            filterString += `brightness(${intensity}%) `;
+            break;
+          case 'contrast':
+            filterString += `contrast(${intensity}%) `;
+            break;
+          case 'saturate':
+            filterString += `saturate(${intensity}%) `;
+            break;
+          case 'grayscale':
+            filterString += `grayscale(${intensity}%) `;
+            break;
+          case 'sepia':
+            filterString += `sepia(${intensity}%) `;
+            break;
+          case 'blur':
+            filterString += `blur(${intensity / 10}px) `;
+            break;
+        }
+      }
+      if (op.type === 'rotate') {
+        transform = `rotate(${op.angle}deg)`;
+      }
+    });
 
-    const handleLoadedData = () => {
-      setIsLoading(false);
-    };
-
-    const handleError = () => {
-      setError('Error loading video');
-      setIsLoading(false);
-    };
-
-    video.addEventListener('loadstart', handleLoadStart);
-    video.addEventListener('loadeddata', handleLoadedData);
-    video.addEventListener('error', handleError);
-
-    // Only load if src has changed
-    if (video.src !== src) {
-      video.load();
-    }
-
-    return () => {
-      video.removeEventListener('loadstart', handleLoadStart);
-      video.removeEventListener('loadeddata', handleLoadedData);
-      video.removeEventListener('error', handleError);
-    };
-  }, [videoRef, src]);
+    setStyle({
+      filter: filterString.trim() || undefined,
+      transform: transform || undefined,
+      transition: 'filter 0.3s ease, transform 0.3s ease',
+    });
+  }, [operations]);
 
   return (
-    <div className="relative group aspect-video bg-black rounded-lg overflow-hidden">
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-          <p className="text-white">{error}</p>
-        </div>
-      )}
-
+    <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
       <video
         ref={videoRef}
+        src={src}
         className="w-full h-full"
-        playsInline
-        controls={false}
-        preload="metadata"
-        key={src}
-        onContextMenu={(e) => e.preventDefault()}
+        controls
+        style={style}
       >
-        <source src={src} type="video/mp4" />
         Your browser does not support the video tag.
       </video>
-
-      <div className="absolute inset-0">
-        <div className="relative w-full h-full">
-          <VideoControls videoRef={videoRef} />
-        </div>
-      </div>
     </div>
   );
 }

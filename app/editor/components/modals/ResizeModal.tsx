@@ -1,90 +1,62 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface ResizeModalProps {
   onClose: () => void;
   onApply: (width: number, height: number) => void;
-  initialWidth: number;
-  initialHeight: number;
 }
 
-export function ResizeModal({ onClose, onApply, initialWidth, initialHeight }: ResizeModalProps) {
-  const [width, setWidth] = useState(initialWidth);
-  const [height, setHeight] = useState(initialHeight);
-  const [maintainAspectRatio, setMaintainAspectRatio] = useState(true);
-  const aspectRatio = initialWidth / initialHeight;
+export function ResizeModal({ onClose, onApply }: ResizeModalProps) {
+  const [width, setWidth] = useState(1280);
+  const [height, setHeight] = useState(720);
 
-  const handleWidthChange = (newWidth: number) => {
-    setWidth(newWidth);
-    if (maintainAspectRatio) {
-      setHeight(Math.round(newWidth / aspectRatio));
-    }
-  };
-
-  const handleHeightChange = (newHeight: number) => {
-    setHeight(newHeight);
-    if (maintainAspectRatio) {
-      setWidth(Math.round(newHeight * aspectRatio));
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onApply(width, height);
   };
 
   return (
-    <Modal onClose={onClose}>
-      <div className="space-y-4 p-6">
-        <h2 className="text-xl font-bold">Resize Video</h2>
-        
-        <div className="space-y-4">
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Resize Video</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Width</label>
+              <Label htmlFor="width">Width</Label>
               <Input
+                id="width"
                 type="number"
                 value={width}
-                onChange={(e) => handleWidthChange(parseInt(e.target.value) || 0)}
+                onChange={(e) => setWidth(Number(e.target.value))}
                 min={1}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Height</label>
+              <Label htmlFor="height">Height</Label>
               <Input
+                id="height"
                 type="number"
                 value={height}
-                onChange={(e) => handleHeightChange(parseInt(e.target.value) || 0)}
+                onChange={(e) => setHeight(Number(e.target.value))}
                 min={1}
               />
             </div>
           </div>
-
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="aspect-ratio"
-              checked={maintainAspectRatio}
-              onChange={(e) => setMaintainAspectRatio(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            <label htmlFor="aspect-ratio" className="text-sm">
-              Maintain aspect ratio
-            </label>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit">Apply</Button>
           </div>
-        </div>
-
-        <div className="flex justify-end space-x-2">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={() => onApply(width, height)}
-            disabled={width <= 0 || height <= 0}
-          >
-            Apply
-          </Button>
-        </div>
-      </div>
-    </Modal>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 } 

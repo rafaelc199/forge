@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import { RotateCw, RotateCcw } from 'lucide-react';
 
 interface RotateModalProps {
@@ -11,83 +10,61 @@ interface RotateModalProps {
   onApply: (angle: number) => void;
 }
 
-// Add this CSS class utility
-const getRotateClass = (angle: number) => {
-  const normalizedAngle = ((angle % 360) + 360) % 360;
-  return `rotate-[${normalizedAngle}deg]`;
-};
-
 export function RotateModal({ onClose, onApply }: RotateModalProps) {
-  const [angle, setAngle] = useState(0);
+  const [rotation, setRotation] = useState(0);
 
-  const handleQuickRotate = (degrees: number) => {
-    setAngle((prev) => {
-      const newAngle = prev + degrees;
-      return newAngle > 180 ? newAngle - 360 : newAngle < -180 ? newAngle + 360 : newAngle;
-    });
+  const handleRotate = (direction: 'cw' | 'ccw') => {
+    const newRotation = direction === 'cw' ? rotation + 90 : rotation - 90;
+    setRotation(newRotation % 360);
   };
 
   return (
-    <Modal onClose={onClose}>
-      <div className="space-y-4 p-6">
-        <h2 className="text-xl font-bold">Rotate Video</h2>
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Rotate Video</DialogTitle>
+        </DialogHeader>
         <div className="space-y-6">
-          <div className="flex items-center justify-center p-8">
+          <div className="flex justify-center">
             <div 
-              className={`relative w-40 h-40 border-2 border-primary rounded-lg transition-transform duration-300 ${getRotateClass(angle)}`}
+              className="w-48 h-48 border-2 border-primary rounded-lg flex items-center justify-center"
+              style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.3s ease' }}
             >
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-20 h-12 bg-primary/20 rounded" />
-              </div>
+              <div className="w-32 h-20 bg-primary/20 rounded"></div>
             </div>
           </div>
+          
+          <div className="flex justify-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => handleRotate('ccw')}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => handleRotate('cw')}
+            >
+              <RotateCw className="h-4 w-4" />
+            </Button>
+          </div>
 
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Angle: {angle}°</span>
-              <Button variant="ghost" size="sm" onClick={() => setAngle(0)}>
-                Reset
-              </Button>
-            </div>
-            <Slider
-              value={[angle]}
-              min={-180}
-              max={180}
-              step={1}
-              defaultValue={[0]}
-              onValueChange={([value]) => setAngle(value)}
-              className="my-4"
-            />
-            <div className="flex justify-center gap-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickRotate(-90)}
-              >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                -90°
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickRotate(90)}
-              >
-                <RotateCw className="h-4 w-4 mr-2" />
-                +90°
-              </Button>
-            </div>
+          <div className="text-center text-sm text-muted-foreground">
+            Current Rotation: {rotation}°
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={() => onApply(rotation)}>
+              Apply
+            </Button>
           </div>
         </div>
-
-        <div className="flex justify-end space-x-2 pt-4">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => onApply(angle)}>
-            Apply
-          </Button>
-        </div>
-      </div>
-    </Modal>
+      </DialogContent>
+    </Dialog>
   );
 } 
